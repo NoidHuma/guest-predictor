@@ -13,8 +13,8 @@ MODEL_PATH = Path("models/ridge_model.joblib")
 TARGET_COLUMN = "guests"
 
 NUMERIC_FEATURES = (
-    "month",
-    "is_holiday",
+    "month_sin",
+    "month_cos",
     "lag_7",
     "lag_14",
     "lag_28",
@@ -22,12 +22,16 @@ NUMERIC_FEATURES = (
     "rolling_mean_28_lag_7",
 )
 
+BINARY_FEATURES = (
+    "is_holiday",
+)
+
 CATEGORICAL_FEATURES = (
     "restaurant_id",
     "day_of_week",
 )
 
-FEATURE_COLUMNS = NUMERIC_FEATURES + CATEGORICAL_FEATURES
+FEATURE_COLUMNS = NUMERIC_FEATURES + BINARY_FEATURES + CATEGORICAL_FEATURES
 
 
 def build_model() -> Pipeline:
@@ -37,6 +41,11 @@ def build_model() -> Pipeline:
                 "numeric",
                 StandardScaler(),
                 list(NUMERIC_FEATURES),
+            ),
+            (
+                "binary",
+                "passthrough",
+                list(BINARY_FEATURES),
             ),
             (
                 "categorical",

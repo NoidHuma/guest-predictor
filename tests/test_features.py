@@ -111,7 +111,13 @@ def test_no_target_column_as_feature(
     sample_data: pd.DataFrame,
     feature_columns: list[str],
 ):
-    calendar_cols = {"day_of_week", "month", "is_holiday", "is_weekend"}
+    calendar_cols = {
+        "day_of_week",
+        "month",
+        "month_sin",
+        "month_cos",
+        "is_holiday",
+    }
     for col in feature_columns:
         is_lag = col.startswith("lag_") or col.endswith("_lag_7") or col.endswith("_lag_1")
         is_calendar = col in calendar_cols

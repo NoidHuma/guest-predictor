@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 
@@ -24,6 +25,10 @@ def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
     result["month"] = result["date"].dt.month
 
     holiday_index = pd.MultiIndex.from_tuples(HOLIDAY_MONTH_DAY)
+    month_angle = 2 * np.pi * (result["month"] - 1) / 12
+    result["month_sin"] = np.sin(month_angle)
+    result["month_cos"] = np.cos(month_angle)
+
     month_day = pd.MultiIndex.from_arrays(
         [result["date"].dt.month, result["date"].dt.day]
     )
