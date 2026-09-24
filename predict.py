@@ -176,4 +176,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except ValueError as error:
+        print(f"Ошибка: {error}")
+        raise SystemExit(1)
