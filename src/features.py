@@ -1,52 +1,15 @@
 import pandas as pd
 
 
-HOLIDAY_DATES = (
-    "2024-01-01",
-    "2024-01-02",
-    "2024-01-03",
-    "2024-01-04",
-    "2024-01-05",
-    "2024-01-06",
-    "2024-01-07",
-    "2024-01-08",
-    "2024-02-14",
-    "2024-03-08",
-    "2024-05-01",
-    "2024-05-09",
-    "2024-06-12",
-    "2024-11-04",
-    "2024-12-31",
-    "2025-01-01",
-    "2025-01-02",
-    "2025-01-03",
-    "2025-01-04",
-    "2025-01-05",
-    "2025-01-06",
-    "2025-01-07",
-    "2025-01-08",
-    "2025-02-14",
-    "2025-03-08",
-    "2025-05-01",
-    "2025-05-09",
-    "2025-06-12",
-    "2025-11-04",
-    "2025-12-31",
-    "2026-01-01",
-    "2026-01-02",
-    "2026-01-03",
-    "2026-01-04",
-    "2026-01-05",
-    "2026-01-06",
-    "2026-01-07",
-    "2026-01-08",
-    "2026-02-14",
-    "2026-03-08",
-    "2026-05-01",
-    "2026-05-09",
-    "2026-06-12",
-    "2026-11-04",
-    "2026-12-31",
+HOLIDAY_MONTH_DAY = (
+    (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8),
+    (2, 14),
+    (3, 8),
+    (5, 1),
+    (5, 9),
+    (6, 12),
+    (11, 4),
+    (12, 31),
 )
 
 LAGS = (7, 14, 28)
@@ -56,11 +19,15 @@ ROLLING_SHIFT = 7
 
 def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
     result = df.copy()
-    holiday_dates = pd.to_datetime(HOLIDAY_DATES)
 
     result["day_of_week"] = result["date"].dt.dayofweek
     result["month"] = result["date"].dt.month
-    result["is_holiday"] = result["date"].isin(holiday_dates).astype(int)
+
+    holiday_index = pd.MultiIndex.from_tuples(HOLIDAY_MONTH_DAY)
+    month_day = pd.MultiIndex.from_arrays(
+        [result["date"].dt.month, result["date"].dt.day]
+    )
+    result["is_holiday"] = month_day.isin(holiday_index).astype(int)
 
     return result
 
