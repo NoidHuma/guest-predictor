@@ -14,7 +14,6 @@ TARGET_COLUMN = "guests"
 
 NUMERIC_FEATURES = (
     "month",
-    "is_weekend",
     "is_holiday",
     "lag_7",
     "lag_14",

@@ -2,6 +2,21 @@ import pandas as pd
 
 
 HOLIDAY_DATES = (
+    "2024-01-01",
+    "2024-01-02",
+    "2024-01-03",
+    "2024-01-04",
+    "2024-01-05",
+    "2024-01-06",
+    "2024-01-07",
+    "2024-01-08",
+    "2024-02-14",
+    "2024-03-08",
+    "2024-05-01",
+    "2024-05-09",
+    "2024-06-12",
+    "2024-11-04",
+    "2024-12-31",
     "2025-01-01",
     "2025-01-02",
     "2025-01-03",
@@ -45,7 +60,6 @@ def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
 
     result["day_of_week"] = result["date"].dt.dayofweek
     result["month"] = result["date"].dt.month
-    result["is_weekend"] = result["day_of_week"].isin([5, 6]).astype(int)
     result["is_holiday"] = result["date"].isin(holiday_dates).astype(int)
 
     return result
