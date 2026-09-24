@@ -164,6 +164,33 @@ def generate_restaurant_frame(
 
     frame = frame.drop(index=missing_idx)
 
+    partial_missing_candidates = frame.index[
+        frame["guests"].gt(0) & frame["revenue"].gt(0)
+        ].to_numpy()
+
+    guests_missing_count = max(3, int(len(frame) * 0.004))
+    revenue_missing_count = max(3, int(len(frame) * 0.005))
+
+    guests_missing_idx = rng.choice(
+        partial_missing_candidates,
+        size=guests_missing_count,
+        replace=False,
+    )
+
+    revenue_missing_candidates = np.setdiff1d(
+        partial_missing_candidates,
+        guests_missing_idx,
+    )
+
+    revenue_missing_idx = rng.choice(
+        revenue_missing_candidates,
+        size=revenue_missing_count,
+        replace=False,
+    )
+
+    frame.loc[guests_missing_idx, "guests"] = np.nan
+    frame.loc[revenue_missing_idx, "revenue"] = np.nan
+
     return frame[
         [
             "date",
