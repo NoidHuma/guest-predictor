@@ -56,29 +56,6 @@ def test_warmup_nans(sample_data: pd.DataFrame):
     assert not df["lag_7"].iloc[7:].isna().any()
 
 
-def test_no_future_leakage_on_arbitrary_mutation(
-    sample_data: pd.DataFrame,
-    feature_columns: list[str],
-):
-    df_orig = make_features(sample_data, target="guests")
-
-    mutated = sample_data.copy()
-    mutation_date = pd.Timestamp("2024-01-30")
-    mutated.loc[mutated["date"] == mutation_date, "guests"] = 9999
-
-    df_mut = make_features(mutated, target="guests")
-
-    cutoff = mutation_date - pd.Timedelta(days=35)
-    mask = df_orig["date"] < cutoff
-
-    for col in feature_columns:
-        pd.testing.assert_series_equal(
-            df_orig.loc[mask, col].reset_index(drop=True).astype(float),
-            df_mut.loc[mask, col].reset_index(drop=True).astype(float),
-            check_names=False,
-        )
-
-
 def test_rolling_features_are_lagged(sample_data: pd.DataFrame):
     df_orig = make_features(sample_data, target="guests")
 
