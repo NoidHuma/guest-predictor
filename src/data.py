@@ -8,6 +8,8 @@ import pandas as pd
 RAW_PATH = Path("data/raw/dataset.csv")
 PROCESSED_PATH = Path("data/processed/dataset.csv")
 
+DEFAULT_VALID_WEEKS = 6
+
 RAW_SCHEMA = {
     "date": "datetime64[ns]",
     "restaurant_id": "int64",
@@ -27,6 +29,18 @@ PROCESSED_SCHEMA = {
 class Dataset:
     frame: pd.DataFrame
     target: str = "guests"
+
+
+@dataclass(frozen=True)
+class ImputationStats:
+    by_group: pd.Series
+    by_restaurant: pd.Series
+    global_value: float
+
+
+@dataclass(frozen=True)
+class CapBounds:
+    upper_by_restaurant: pd.Series
 
 
 def load_raw(path: str | Path = RAW_PATH) -> pd.DataFrame:
@@ -75,46 +89,53 @@ def restore_daily_calendar(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def fill_missing_by_calendar_median(
-    df: pd.DataFrame,
-    column: str,
-) -> pd.Series:
-    filled = df[column].copy()
+def fit_imputation_stats(df: pd.DataFrame, column: str) -> ImputationStats:
     day_of_week = df["date"].dt.dayofweek
 
-    group_medians = (
+    by_group = (
         df.assign(day_of_week=day_of_week)
         .groupby(["restaurant_id", "day_of_week"])[column]
-        .transform("median")
+        .median()
+    )
+    by_restaurant = df.groupby("restaurant_id")[column].median()
+
+    return ImputationStats(
+        by_group=by_group,
+        by_restaurant=by_restaurant,
+        global_value=float(df[column].median()),
     )
 
-    restaurant_medians = df.groupby("restaurant_id")[column].transform("median")
-    global_median = df[column].median()
 
-    filled = filled.fillna(group_medians)
-    filled = filled.fillna(restaurant_medians)
-    filled = filled.fillna(global_median)
+def apply_imputation(
+    df: pd.DataFrame,
+    stats: ImputationStats,
+    column: str,
+) -> pd.Series:
+    day_of_week = df["date"].dt.dayofweek
+    keys = pd.MultiIndex.from_arrays([df["restaurant_id"], day_of_week])
+
+    group_values = pd.Series(
+        stats.by_group.reindex(keys).to_numpy(),
+        index=df.index,
+    )
+    restaurant_values = df["restaurant_id"].map(stats.by_restaurant)
+
+    filled = df[column].copy()
+    filled = filled.fillna(group_values)
+    filled = filled.fillna(restaurant_values)
+    filled = filled.fillna(stats.global_value)
 
     return filled
 
 
-def fill_missing_values(df: pd.DataFrame) -> pd.DataFrame:
-    result = df.copy()
-
-    result["guests"] = fill_missing_by_calendar_median(result, "guests")
-    result["revenue"] = fill_missing_by_calendar_median(result, "revenue")
-
-    return result
-
-
-def cap_outliers(
+def fit_cap_bounds(
     df: pd.DataFrame,
     column: str,
     iqr_multiplier: float = 3.0,
-) -> pd.DataFrame:
-    result = df.copy()
+) -> CapBounds:
+    upper_by_restaurant = {}
 
-    for _, group in result.groupby("restaurant_id"):
+    for restaurant_id, group in df.groupby("restaurant_id"):
         values = group[column].dropna()
 
         q1 = values.quantile(0.25)
@@ -122,15 +143,20 @@ def cap_outliers(
         iqr = q3 - q1
 
         if pd.isna(iqr) or iqr == 0:
-            continue
+            upper_by_restaurant[restaurant_id] = np.inf
+        else:
+            upper_by_restaurant[restaurant_id] = q3 + iqr_multiplier * iqr
 
-        upper_bound = q3 + iqr_multiplier * iqr
+    return CapBounds(upper_by_restaurant=pd.Series(upper_by_restaurant))
 
-        result.loc[group.index, column] = result.loc[group.index, column].clip(
-            upper=upper_bound
-        )
 
-    return result
+def apply_cap(
+    df: pd.DataFrame,
+    bounds: CapBounds,
+    column: str,
+) -> pd.Series:
+    upper = df["restaurant_id"].map(bounds.upper_by_restaurant)
+    return df[column].clip(upper=upper)
 
 
 def apply_processed_schema(df: pd.DataFrame) -> pd.DataFrame:
@@ -144,11 +170,28 @@ def apply_processed_schema(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-def prepare_daily_data(df: pd.DataFrame) -> Dataset:
-    prepared = restore_daily_calendar(df)
-    prepared = fill_missing_values(prepared)
-    prepared = cap_outliers(prepared, "guests")
-    prepared = cap_outliers(prepared, "revenue")
+def prepare_daily_data(
+    df: pd.DataFrame,
+    valid_weeks: int = DEFAULT_VALID_WEEKS,
+) -> Dataset:
+    restored = restore_daily_calendar(df)
+
+    cutoff = restored["date"].max() - pd.Timedelta(weeks=valid_weeks)
+    train_raw = restored[restored["date"].le(cutoff)]
+
+    if train_raw.empty:
+        raise ValueError("Not enough history to fit imputation statistics")
+
+    guests_stats = fit_imputation_stats(train_raw, "guests")
+    revenue_stats = fit_imputation_stats(train_raw, "revenue")
+    guests_bounds = fit_cap_bounds(train_raw, "guests")
+    revenue_bounds = fit_cap_bounds(train_raw, "revenue")
+
+    prepared = restored.copy()
+    prepared["guests"] = apply_imputation(prepared, guests_stats, "guests")
+    prepared["revenue"] = apply_imputation(prepared, revenue_stats, "revenue")
+    prepared["guests"] = apply_cap(prepared, guests_bounds, "guests")
+    prepared["revenue"] = apply_cap(prepared, revenue_bounds, "revenue")
     prepared = apply_processed_schema(prepared)
 
     prepared = prepared.sort_values(["restaurant_id", "date"]).reset_index(drop=True)
